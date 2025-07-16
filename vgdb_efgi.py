@@ -1,7 +1,9 @@
 import requests
 from vgdb_general import smart_http_request
 import json
-
+from psycopg2.extras import *
+from psycopg2.extras import Json
+import psycopg2
 
 def download_efgi_reports(
     s: requests.Session,
@@ -75,15 +77,57 @@ def download_efgi_reports(
     pass
 
 
+def insert_efgi_json_to_pg(pgdsn=None, source='reports_efgi.json', dest='rfgf.efgi_catalog'):
+    """inserts data downloaded by download_efgi_reports() to postgresql
+
+    Args:
+        pgdsn (_type_, optional): postgres connection string.
+        Format is "host=<host> port=<port> dbname=<db> user=<user> password=******".
+        Defaults to None.
+        source (str, optional): source json file. Defaults to 'reports_efgi.json'.
+        dest (str, optional): destination postgres table. Must have efgi_data[jsonb] column.
+        Defaults to 'rfgf.efgi_catalog'.
+    """
+    with open(source, 'r', encoding='utf-8') as f:
+        jdata = json.load(f)
+    pgconn = None
+    i = 1
+    if pgdsn:
+        while not pgconn and i <= 10:
+            i += 1
+            try:
+                pgconn = psycopg2.connect(pgdsn, cursor_factory=DictCursor)
+            except Exception as err:
+                print(err)
+    if pgconn:
+        with pgconn.cursor() as cur:
+            for i, jreport in enumerate(jdata):
+                sql = f"insert into {dest}(efgi_data) values({Json(jreport)});"
+                cur.execute(sql)
+                if i != 0 and i % 100000 == 0:
+                    pgconn.commit()
+        pass
+        pgconn.commit()
+        pgconn.close()  
+        pass
+            
+
+
 if __name__ == "__main__":
-    with requests.Session() as s:
-        download_efgi_reports(
-            s,
-            page_size=100,
-            page_to=1,
-            cookie="DokuWiki=92lml7o0ee7c8fomm1mjmkepe9; EFGI_SESSION=VszeHN5GDHWADZMVUDGfiw|1752656842|GT8JUNEXlMO8p7rBkbM7A22xpQs",
-        )
-        # download_efgi_reports(
-        #     s,
-        #     cookie="DokuWiki=92lml7o0ee7c8fomm1mjmkepe9; EFGI_SESSION=VszeHN5GDHWADZMVUDGfiw|1752656842|GT8JUNEXlMO8p7rBkbM7A22xpQs",
-        # )
+    with open('.pgdsn', encoding='utf-8') as f:
+        pgdsn = f.read()
+    
+    insert_efgi_json_to_pg(pgdsn=pgdsn)
+    
+    # with requests.Session() as s:
+    #     download_efgi_reports(
+    #         s,
+    #         page_size=100,
+    #         page_to=1,
+    #         cookie="DokuWiki=92lml7o0ee7c8fomm1mjmkepe9; EFGI_SESSION=VszeHN5GDHWADZMVUDGfiw|1752656842|GT8JUNEXlMO8p7rBkbM7A22xpQs",
+    #     )
+    #     # download_efgi_reports(
+    #     #     s,
+    #     #     cookie="DokuWiki=92lml7o0ee7c8fomm1mjmkepe9; EFGI_SESSION=VszeHN5GDHWADZMVUDGfiw|1752656842|GT8JUNEXlMO8p7rBkbM7A22xpQs",
+    #     # )
+    

@@ -12,3 +12,4 @@ wheels/
 # Custom files
 reports_efgi.json
 reports_efgi_20250715.json
+.pgdsn
