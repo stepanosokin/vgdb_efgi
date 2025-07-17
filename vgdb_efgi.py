@@ -1,8 +1,7 @@
 import requests
 from vgdb_general import smart_http_request
 import json
-from psycopg2.extras import *
-from psycopg2.extras import Json
+from psycopg2.extras import Json, DictCursor
 import psycopg2
 
 def download_efgi_reports(
@@ -96,20 +95,45 @@ def insert_efgi_json_to_pg(pgdsn=None, source='reports_efgi.json', dest='rfgf.ef
         while not pgconn and i <= 10:
             i += 1
             try:
-                pgconn = psycopg2.connect(pgdsn, cursor_factory=DictCursor)
+                # pgconn = psycopg2.connect(pgdsn, cursor_factory=DictCursor)
+                pgconn = psycopg2.connect(pgdsn)
             except Exception as err:
                 print(err)
     if pgconn:
+        # with pgconn.cursor() as cur:
+        #     for i, jreport in enumerate(jdata):
+        #         sql = f"insert into {dest}(efgi_data) values({Json(jreport)});"
+        #         cur.execute(sql)
+        #         if i != 0 and i % 100000 == 0:
+        #             pgconn.commit()
+        # pass
+        # pgconn.commit()
+        # pgconn.close()  
+        # pass
+    
+        ####################################v 2#################################
         with pgconn.cursor() as cur:
+            sql = f"insert into {dest}(efgi_data) values"
             for i, jreport in enumerate(jdata):
-                sql = f"insert into {dest}(efgi_data) values({Json(jreport)});"
-                cur.execute(sql)
-                if i != 0 and i % 100000 == 0:
+                sql += f"({Json(jreport)})"
+                if i != 0 and (i + 1) % 10000 == 0:
+                    sql += ';'
+                    cur.execute(sql)
                     pgconn.commit()
-        pass
+                    pass
+                    sql = f"insert into {dest}(efgi_data) values"
+                elif i < len(jdata) - 1:
+                    sql += ","
+                    pass
+            if len(jdata) % 10000 > 0:
+                sql += ';'
+                cur.execute(sql)
+                pgconn.commit()
         pgconn.commit()
-        pgconn.close()  
-        pass
+        pgconn.close()
+        #######################################################################
+            
+                
             
 
 
@@ -117,7 +141,7 @@ if __name__ == "__main__":
     with open('.pgdsn', encoding='utf-8') as f:
         pgdsn = f.read()
     
-    insert_efgi_json_to_pg(pgdsn=pgdsn)
+    insert_efgi_json_to_pg(pgdsn=pgdsn, source='reports_efgi_20250715.json')
     
     # with requests.Session() as s:
     #     download_efgi_reports(
