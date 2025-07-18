@@ -143,7 +143,7 @@ if __name__ == "__main__":
     with open(".pgdsn", encoding="utf-8") as f:
         pgdsn = f.read()
 
-    insert_efgi_json_to_pg(pgdsn=pgdsn, source="reports_efgi_20250715.json", load_from=290000)
+    insert_efgi_json_to_pg(pgdsn=pgdsn, source="reports_efgi_20250715.json", load_from=860000)
 
     # with requests.Session() as s:
     #     download_efgi_reports(
