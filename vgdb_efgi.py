@@ -4,6 +4,7 @@ import json
 from psycopg2.extras import Json, DictCursor
 import psycopg2
 
+
 def download_efgi_reports(
     s: requests.Session,
     page_size=100000,
@@ -12,8 +13,8 @@ def download_efgi_reports(
     cookie="сюда вставить свежий cookie из сессии браузера efgi.ru после логина, запрос search",
 ):
     """This function downloads the efgi geologic reports metadata database from https://efgi.ru/#/registry/search
-    to reports_efgi.json file using the most silly method: log in on the website manually, 
-    copy the cookie from the http request, and then use it as an input for the function. 
+    to reports_efgi.json file using the most silly method: log in on the website manually,
+    copy the cookie from the http request, and then use it as an input for the function.
     Using default values the function will download up to 1 400 000 reports metadata.
 
     Args:
@@ -22,10 +23,10 @@ def download_efgi_reports(
         page_from (int, optional): starting page (offset) for scraping. Defaults to 0.
         page_to (int, optional): ending page (offset) for scraping. Defaults to 13.
         cookie (str, optional): You must give a fresh cookie from https://efgi.ru/#/registry/search website
-        after logging in with gosuslugi. Open the site from Chrome, open devtools. perform any search. 
+        after logging in with gosuslugi. Open the site from Chrome, open devtools. perform any search.
         Then find the 'search' request in the Network tab, and then look for the 'cookie' header.
         You need its value as an input.This cookie is temporary, so you'll need a new one after some time.
-    """    
+    """
     # empty list for the result
     database = []
     # post request body in json with filtering parameters
@@ -71,12 +72,14 @@ def download_efgi_reports(
         )
         jresult = result.json()
         database.extend(jresult["data"])
-    with open("reports_efgi.json", "w", encoding="utf-8") as f:
+    with open("result/reports_efgi.json", "w", encoding="utf-8") as f:
         json.dump(database, f, ensure_ascii=False, indent=2)
     pass
 
 
-def insert_efgi_json_to_pg(pgdsn=None, source='reports_efgi.json', dest='rfgf.efgi_catalog'):
+def insert_efgi_json_to_pg(
+    pgdsn=None, source="reports_efgi.json", dest="rfgf.efgi_catalog", load_from=0
+):
     """inserts data downloaded by download_efgi_reports() to postgresql
 
     Args:
@@ -87,7 +90,7 @@ def insert_efgi_json_to_pg(pgdsn=None, source='reports_efgi.json', dest='rfgf.ef
         dest (str, optional): destination postgres table. Must have efgi_data[jsonb] column.
         Defaults to 'rfgf.efgi_catalog'.
     """
-    with open(source, 'r', encoding='utf-8') as f:
+    with open(source, "r", encoding="utf-8") as f:
         jdata = json.load(f)
     pgconn = None
     i = 1
@@ -100,6 +103,7 @@ def insert_efgi_json_to_pg(pgdsn=None, source='reports_efgi.json', dest='rfgf.ef
             except Exception as err:
                 print(err)
     if pgconn:
+        ###################################v1##################################
         # with pgconn.cursor() as cur:
         #     for i, jreport in enumerate(jdata):
         #         sql = f"insert into {dest}(efgi_data) values({Json(jreport)});"
@@ -108,16 +112,17 @@ def insert_efgi_json_to_pg(pgdsn=None, source='reports_efgi.json', dest='rfgf.ef
         #             pgconn.commit()
         # pass
         # pgconn.commit()
-        # pgconn.close()  
+        # pgconn.close()
         # pass
-    
-        ####################################v 2#################################
+        #######################################################################
+
+        ####################################v2##################################
         with pgconn.cursor() as cur:
             sql = f"insert into {dest}(efgi_data) values"
-            for i, jreport in enumerate(jdata):
+            for i, jreport in enumerate(jdata[load_from:]):
                 sql += f"({Json(jreport)})"
                 if i != 0 and (i + 1) % 10000 == 0:
-                    sql += ';'
+                    sql += ";"
                     cur.execute(sql)
                     pgconn.commit()
                     pass
@@ -126,23 +131,20 @@ def insert_efgi_json_to_pg(pgdsn=None, source='reports_efgi.json', dest='rfgf.ef
                     sql += ","
                     pass
             if len(jdata) % 10000 > 0:
-                sql += ';'
+                sql += ";"
                 cur.execute(sql)
                 pgconn.commit()
         pgconn.commit()
         pgconn.close()
         #######################################################################
-            
-                
-            
 
 
 if __name__ == "__main__":
-    with open('.pgdsn', encoding='utf-8') as f:
+    with open(".pgdsn", encoding="utf-8") as f:
         pgdsn = f.read()
-    
-    insert_efgi_json_to_pg(pgdsn=pgdsn, source='reports_efgi_20250715.json')
-    
+
+    insert_efgi_json_to_pg(pgdsn=pgdsn, source="reports_efgi_20250715.json", load_from=290000)
+
     # with requests.Session() as s:
     #     download_efgi_reports(
     #         s,
@@ -154,4 +156,3 @@ if __name__ == "__main__":
     #     #     s,
     #     #     cookie="DokuWiki=92lml7o0ee7c8fomm1mjmkepe9; EFGI_SESSION=VszeHN5GDHWADZMVUDGfiw|1752656842|GT8JUNEXlMO8p7rBkbM7A22xpQs",
     #     # )
-    
